@@ -309,6 +309,17 @@ bool parse_next_point(
     if (result->error)
         return false;
 
+    /* Skip last point */
+    /* assuming only the last point exactly matches the first */
+    if (ring->first) {
+        LatLng* coords_first = &ring->first->vertex;
+        if (coords.lng == coords_first->lng
+            && coords.lat == coords_first->lat)
+        {
+            return false;
+        }
+    }
+
     /* Create point */
     LinkedLatLng* point = malloc(sizeof(LinkedLatLng));
     if (!point) {
