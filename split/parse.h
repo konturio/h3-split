@@ -2,7 +2,7 @@
 
 #include <stddef.h>
 #include <h3/h3api.h>
-#include "../types.h"
+#include <split/types.h>
 
 typedef enum {
     WktParseError_Ok = 0,

@@ -1,19 +1,44 @@
 AUTOMAKE_OPTIONS = subdir-objects
 ACLOCAL_AMFLAGS = -I m4
+AM_CFLAGS = -I . -Wall -g
 
-LIBS_H3 = -lh3
+# Static library
+HEADER_FILES = \
+	split/types.h \
+	split/bbox3.h \
+	split/h3.h \
+	split/parse.h \
+	split/print.h \
+	split/split.h \
+	split/vect3.h
+SOURCE_FILES = \
+	$(HEADER_FILES) \
+	src/bbox3.c \
+	src/h3.c \
+	src/parse.c \
+	src/print.c \
+	src/split.c \
+	src/vect3.c
 
+lib_LTLIBRARIES = libsplit.la
+libsplit_ladir = $(includedir)
+nobase_libsplit_la_HEADERS = $(HEADER_FILES)
+libsplit_la_SOURCES = $(SOURCE_FILES)
+libsplit_la_LIBADD = -lh3 -lm
+
+MYLIBS = libsplit.la -lh3 -lm
+
+# Program
 bin_PROGRAMS = split
+split_SOURCES = main.c
+split_LDADD = $(MYLIBS)
 
-split_SOURCES = \
-	main.c \
-	types.h \
-	h3.h \
-	h3.c \
-	wkt/parse.h \
-	wkt/parse.c \
-	wkt/print.h \
-	wkt/print.c
+# Tests
+TESTS = \
+	test_bbox
 
-split_LDADD = $(LIBS_H3)
-split_CFLAGS = -Wall -Wl,-rpath -Wl,$(prefix)/lib
+check_PROGRAMS = $(TESTS)
+TEST_SOURCES = test/print.h test/print.c
+
+test_bbox_SOURCES = test/test_bbox.c $(TEST_SOURCES)
+test_bbox_LDADD = $(MYLIBS)

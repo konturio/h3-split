@@ -1,11 +1,11 @@
-#include "parse.h"
+#include <split/parse.h>
 #include <assert.h>
 #include <ctype.h>
 #include <errno.h>
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
-#include "../h3.h"
+#include <split/h3.h>
 #include <stdio.h>
 
 static const char WktTypeNamePolygon[] = "polygon";
@@ -272,6 +272,7 @@ bool parse_next_ring(
         result->error = WktParseError_RightParenExpected;
         return false;
     }
+    advance(data, 1);
 
     /* Add ring */
     add_ring(polygon, ring);
@@ -304,10 +305,12 @@ bool parse_next_point(
     coords.lng = parse_coord(data, result);
     if (result->error)
         return false;
+    coords.lng = degsToRads(coords.lng);
     /* lat */
     coords.lat = parse_coord(data, result);
     if (result->error)
         return false;
+    coords.lat = degsToRads(coords.lat);
 
     /* Skip last point */
     /* assuming only the last point exactly matches the first */

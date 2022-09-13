@@ -1,16 +1,20 @@
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <getopt.h>
 #include <h3/h3api.h>
-#include "wkt/parse.h"
-#include "wkt/print.h"
+#include <split/h3.h>
+#include <split/parse.h>
+#include <split/print.h>
+#include <split/split.h>
 
 static void exit_usage(const char* name);
 
 typedef struct {
     const char* input_path;
+    bool verbose;
 } Args;
 
 static void parse_args(Args* args, int argc, char** argv);
@@ -39,19 +43,42 @@ int main(int argc, char** argv) {
             wkt_parse_error_to_string(parse_result.error));
         exit(EXIT_FAILURE);
     }
+    LinkedGeoPolygon* polygon = parse_result.object;
 
-    /* Print */
-    print_polygon((LinkedGeoPolygon*) parse_result.object);
-    printf("\n");
+    if (args.verbose) {
+        /* Print input */
+        printf("Input:\n");
+        print_polygon(polygon);
+        printf("\n\n");
+    }
+
+    if (is_crossed_by_180(polygon)) {
+        if (args.verbose) printf("Split\n\n");
+
+        /* Split and print */
+        LinkedGeoPolygon* multi_polygon = split_by_180(polygon);
+        print_polygon(multi_polygon);
+        printf("\n");
+        free_linked_geo_polygon(multi_polygon);
+
+    } else {
+        if (args.verbose) printf("Not split\n\n");
+
+        /* Not split, just print input */
+        print_polygon(polygon);
+        printf("\n");
+    }
 
     /* Cleanup */
+    if (polygon)
+        free(polygon);
     if (data)
         free(data);
 }
 
 
 void exit_usage(const char* name) {
-    printf("Usage: %s TODO\n", name);
+    printf("Usage: %s -f <filename|->[ -v]\n", name);
     exit(EXIT_FAILURE);
 }
 
@@ -60,11 +87,14 @@ void parse_args(Args* args, int argc, char** argv) {
     *args = (Args){0};
 
     int opt;
-    while ((opt = getopt(argc, argv, "f:")) != -1) {
+    while ((opt = getopt(argc, argv, "vf:")) != -1) {
         switch (opt) {
             case 'f':
                 if (strcmp(optarg, "-") != 0)
                     args->input_path = optarg;
+                break;
+            case 'v':
+                args->verbose = true;
                 break;
             default:
                 exit_usage(argv[0]);
