@@ -6,7 +6,7 @@
 #include <split/h3.h>
 #include <split/vect3.h>
 
-#define DEBUG 1
+#define DEBUG 0
 #if DEBUG
 # include <stdio.h>
 #endif
@@ -51,6 +51,9 @@ typedef struct {
     const LinkedGeoLoop** holes;
 } Split;
 
+static bool is_polygon_crossed_by_180(const LinkedGeoPolygon* polygon);
+static LinkedGeoPolygon* split_polygon_by_180(const LinkedGeoPolygon* polygon);
+
 static bool is_ring_crossed(const LinkedGeoLoop* ring);
 static double split_180_lat(const LatLng *coord1, const LatLng *coord2);
 
@@ -86,6 +89,7 @@ static short latlng_ring_pos(
 static short segment_intersect(const Vect3* v1, const Vect3* v2, const Vect3* u1, const Vect3* u2);
 static short point_between(const Vect3* v1, const Vect3* v2, const Vect3* p);
 
+static LinkedGeoPolygon* copy_linked_geo_polygon(const LinkedGeoPolygon* polygon);
 static LinkedGeoLoop* copy_linked_geo_loop(const LinkedGeoLoop* loop);
 static LinkedLatLng* copy_linked_latlng(const LinkedLatLng* latlng);
 
@@ -95,15 +99,58 @@ static void dbg_print_latlng(const LatLng* latlng);
 static void dbg_print_double(double value);
 #endif
 
+bool is_crossed_by_180(const LinkedGeoPolygon* multi_polygon) {
+    for (const LinkedGeoPolygon* polygon = multi_polygon;
+         polygon != NULL;
+         polygon = polygon->next)
+    {
+        if (is_polygon_crossed_by_180(polygon))
+            return true;
+    }
+    return false;
+}
 
-bool is_crossed_by_180(const LinkedGeoPolygon* polygon) {
+
+LinkedGeoPolygon* split_by_180(const LinkedGeoPolygon* multi_polygon) {
+    LinkedGeoPolygon* result = NULL;
+    LinkedGeoPolygon* last = NULL;
+
+    for (const LinkedGeoPolygon* polygon = multi_polygon;
+         polygon != NULL;
+         polygon = polygon->next)
+    {
+        /* Split or copy next polygon */
+        LinkedGeoPolygon* next_result = is_polygon_crossed_by_180(polygon)
+            ? split_polygon_by_180(polygon)
+            : copy_linked_geo_polygon(polygon);
+        if (!next_result) {
+            if (result)
+                free_linked_geo_polygon(result);
+            return NULL;
+        }
+
+         if (!result) {
+            result = next_result;
+            last = next_result;
+        } else {
+            last->next = next_result;
+        }
+        while (last->next)
+            last = last->next;
+    }
+
+    return result;
+}
+
+
+bool is_polygon_crossed_by_180(const LinkedGeoPolygon* polygon) {
     return (polygon->first && polygon->first->first)
         ? is_ring_crossed(polygon->first)
         : false;
 }
 
 
-LinkedGeoPolygon* split_by_180(const LinkedGeoPolygon* polygon) {
+LinkedGeoPolygon* split_polygon_by_180(const LinkedGeoPolygon* polygon) {
     int ring_num = 0;
     int vertex_num = count_polygon_vertices(polygon, &ring_num);
 
@@ -285,7 +332,7 @@ void split_prepare(Split* split) {
 
 LinkedGeoPolygon* split_create_multi_polygon(Split* split) {
     LinkedGeoPolygon* multi_polygon = NULL;
-    LinkedGeoPolygon* last_polygon = NULL;
+    LinkedGeoPolygon* last = NULL;
     int vertex_idx_start = 0;
     while (true) {
         /* Get next starting vertex */
@@ -303,9 +350,9 @@ LinkedGeoPolygon* split_create_multi_polygon(Split* split) {
         if (!multi_polygon) {
             multi_polygon = polygon;
         } else {
-            last_polygon->next = polygon;
+            last->next = polygon;
         }
-        last_polygon = polygon;
+        last = polygon;
     }
     return multi_polygon;
 }
@@ -336,6 +383,7 @@ int split_add_intersect(Split* split, SplitIntersectDir dir, bool is_prime, doub
 {
     if (split->intersect_num == split->max_intersect_num) {
         /* Reallocate memory for intersections */
+        /* NOTE: ignoring possible reallocation error */
         split->max_intersect_num *= 2;
         if (split->max_intersect_num > split->vertex_num)
             split->max_intersect_num = split->vertex_num;
@@ -752,6 +800,42 @@ short point_between(const Vect3* v1, const Vect3* v2, const Vect3* p) {
 }
 
 
+LinkedGeoPolygon* copy_linked_geo_polygon(const LinkedGeoPolygon* polygon) {
+    LinkedGeoPolygon* copy = NULL;
+    LinkedGeoPolygon* last = NULL;
+
+    for (; polygon != NULL; polygon = polygon->next) {
+        /* Copy current polygon */
+        LinkedGeoPolygon* polygon_copy = malloc(sizeof(LinkedGeoPolygon));
+        if (!polygon_copy)
+            return NULL;
+        *polygon_copy = (LinkedGeoPolygon){0};
+
+        for (const LinkedGeoLoop* loop = polygon->first;
+             loop != NULL;
+             loop = loop->next)
+        {
+            LinkedGeoLoop* loop_copy = copy_linked_geo_loop(loop);
+            if (!loop_copy) {
+                free_linked_geo_polygon(polygon_copy);
+                return NULL;
+            }
+            add_linked_geo_loop(polygon_copy, loop_copy);
+        }
+
+        /* Add to result */
+        if (!copy) {
+            copy = polygon_copy;
+        } else {
+            last->next = polygon_copy;
+        }
+        last = polygon_copy;
+    }
+
+    return copy;
+}
+
+
 LinkedGeoLoop* copy_linked_geo_loop(const LinkedGeoLoop* loop) {
     LinkedGeoLoop* copy = malloc(sizeof(LinkedGeoLoop));
     if (!copy)
@@ -759,8 +843,10 @@ LinkedGeoLoop* copy_linked_geo_loop(const LinkedGeoLoop* loop) {
     *copy = (LinkedGeoLoop){0};
 
     /* Copy vertices */
-    const LinkedLatLng* latlng = loop->first;
-    for (; latlng != NULL; latlng = latlng->next) {
+    for (const LinkedLatLng* latlng = loop->first;
+         latlng != NULL;
+         latlng = latlng->next)
+    {
         LinkedLatLng* latlng_copy = copy_linked_latlng(latlng);
         if (!latlng_copy) {
             free_linked_geo_loop(copy);

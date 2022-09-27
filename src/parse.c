@@ -6,13 +6,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <split/h3.h>
-#include <stdio.h>
 
 static const char WktTypeNamePolygon[] = "polygon";
+static const char WktTypeNameMultiPolygon[] = "multipolygon";
 
 typedef enum {
     WktObjectType_None = 0,
-    WktObjectType_Polygon
+    WktObjectType_Polygon,
+    WktObjectType_MultiPolygon
 } WktObjectType;
 
 typedef struct {
@@ -29,7 +30,12 @@ static void skip_ws(WktData* data);
 static WktObjectType read_type(WktData* data, WktParseResult* result);
 
 static void parse_polygon(WktData* data, WktParseResult* result);
+static void parse_multi_polygon(WktData* data, WktParseResult* result);
 
+static bool parse_next_polygon(
+    WktData* data, WktParseResult* result,
+    LinkedGeoPolygon** multi_polygon,
+    LinkedGeoPolygon** last_polygon);
 static bool parse_next_ring(
     WktData* data, WktParseResult* result, LinkedGeoPolygon* polygon);
 
@@ -37,6 +43,9 @@ static bool parse_next_point(
     WktData* data, WktParseResult* result, LinkedGeoLoop* ring);
 
 static double parse_coord(WktData* data, WktParseResult* result);
+
+static LinkedGeoPolygon* create_empty_polygon();
+static LinkedGeoLoop* create_empty_ring();
 
 static void add_ring(LinkedGeoPolygon* polygon, LinkedGeoLoop* ring);
 static void add_point(LinkedGeoLoop* ring, LinkedLatLng* point);
@@ -60,6 +69,10 @@ WktParseResult wkt_parse(const char* wkt, size_t len) {
     switch (type) {
         case WktObjectType_Polygon:
             parse_polygon(&data, &result);
+            break;
+
+        case WktObjectType_MultiPolygon:
+            parse_multi_polygon(&data, &result);
             break;
 
         default:
@@ -163,6 +176,8 @@ WktObjectType read_type(WktData* data, WktParseResult* result) {
     /* Match to type */
     if (strncmp(typename, WktTypeNamePolygon, pos) == 0)
         type = WktObjectType_Polygon;
+    else if (strncmp(typename, WktTypeNameMultiPolygon, pos) == 0)
+        type = WktObjectType_MultiPolygon;
 
     free(typename); /* free copy */
 
@@ -179,35 +194,122 @@ void parse_polygon(WktData* data, WktParseResult* result) {
     /* Object type */
     result->type = H3Type_GeoPolygon;
 
-    /* Create object */
-    LinkedGeoPolygon* polygon = malloc(sizeof(LinkedGeoPolygon));
-    if (!polygon) {
-        result->error = WktParseError_MemAllocFailed;
-        return;
+    LinkedGeoPolygon* polygon = NULL;
+    LinkedGeoPolygon* dummy_last_polygon = NULL;
+
+    if (parse_next_polygon(data, result, &polygon, &dummy_last_polygon)) {
+        /* Return polygon */
+        assert(polygon);
+        result->object = polygon;
+
+    } else if (!result->error) {
+        /* Return empty polygon */
+        polygon = create_empty_polygon();
+        if (polygon)
+            result->object = polygon;
+        else
+            result->error = WktParseError_MemAllocFailed;
     }
-    *polygon = (LinkedGeoPolygon){0};
+}
+
+
+void parse_multi_polygon(WktData* data, WktParseResult* result) {
+    /* Object type */
+    result->type = H3Type_GeoPolygon;
 
     /* Whitespace */
     skip_ws(data);
     if (is_empty(data)) {
-        /* Empty polygon */
-        result->object = polygon;
+        LinkedGeoPolygon* multi_polygon = create_empty_polygon();
+        if (multi_polygon)
+            result->object = multi_polygon;
+        else
+            result->error = WktParseError_MemAllocFailed;
         return;
     }
 
-    /* Polygon data start */
+    /* Multi polygon data start */
     if (data->data[0] != '(') {
-        free_polygon(polygon);
         result->error = WktParseError_LeftParenExpected;
         return;
     }
     advance(data, 1);
 
+    /* Parse  */
+    LinkedGeoPolygon* multi_polygon = NULL;
+    LinkedGeoPolygon* last_polygon = NULL;
+    while (parse_next_polygon(data, result, &multi_polygon, &last_polygon)) {}
+    if (result->error) {
+        if (multi_polygon)
+            free_polygon(multi_polygon);
+        return;
+    }
+
+    /* Polygon data end */
+    skip_ws(data);
+    if (is_empty(data) || data->data[0] != ')') {
+        if (multi_polygon)
+            free_polygon(multi_polygon);
+        result->error = WktParseError_RightParenExpected;
+        return;
+    }
+
+    /* Return multipolygon */
+    if (!multi_polygon) {
+        multi_polygon = create_empty_polygon();
+        if (multi_polygon)
+            result->object = multi_polygon;
+        else
+            result->error = WktParseError_MemAllocFailed;
+    }
+    result->object = multi_polygon;
+}
+
+
+bool parse_next_polygon(
+    WktData* data, WktParseResult* result,
+    LinkedGeoPolygon** multi_polygon,
+    LinkedGeoPolygon** last_polygon)
+{
+    assert(multi_polygon && last_polygon);
+
+    /* Whitespace */
+    skip_ws(data);
+    if (is_empty(data) || data->data[0] == ')')
+        return false; /* end of polygon data, handled by caller */
+
+    /* Comma */
+    if (*multi_polygon) {
+        assert(*last_polygon);
+        /* Not a first polygon, comma expected */
+        if (data->data[0] != ',') {
+            result->error = WktParseError_CommaExpected;
+            return false;
+        }
+        /* Move to polygon data */
+        advance(data, 1);
+        skip_ws(data);
+    }
+
+    /* Polygon data start */
+    if (data->data[0] != '(') {
+        result->error = WktParseError_LeftParenExpected;
+        return false;
+    }
+    advance(data, 1);
+
+    /* Create polygon */
+    LinkedGeoPolygon* polygon = create_empty_polygon();
+    if (!polygon) {
+        result->error = WktParseError_MemAllocFailed;
+        return false;
+    }
+
     /* Parse rings */
     while (parse_next_ring(data, result, polygon)) {}
     if (result->error) {
         free_polygon(polygon);
-        return;
+        return false;
     }
 
     /* Polygon data end */
@@ -215,11 +317,19 @@ void parse_polygon(WktData* data, WktParseResult* result) {
     if (is_empty(data) || data->data[0] != ')') {
         free_polygon(polygon);
         result->error = WktParseError_RightParenExpected;
-        return;
+        return false;
     }
+    advance(data, 1);
 
     /* Return polygon */
-    result->object = polygon;
+    if (!(*multi_polygon)) {
+        *multi_polygon = polygon;
+    } else {
+        (*last_polygon)->next = polygon;
+    }
+    *last_polygon = polygon;
+
+    return true;
 }
 
 
@@ -251,12 +361,11 @@ bool parse_next_ring(
     advance(data, 1);
 
     /* Create ring */
-    LinkedGeoLoop* ring = malloc(sizeof(LinkedGeoLoop));
+    LinkedGeoLoop* ring = create_empty_ring();
     if (!ring) {
         result->error = WktParseError_MemAllocFailed;
         return false;
     }
-    *ring = (LinkedGeoLoop){0};
 
     /* Parse points */
     while (parse_next_point(data, result, ring)) {}
@@ -373,6 +482,22 @@ double parse_coord(WktData* data, WktParseResult* result) {
 
     free(number); /* free copy */
     return value;
+}
+
+
+LinkedGeoPolygon* create_empty_polygon() {
+    LinkedGeoPolygon* polygon = malloc(sizeof(LinkedGeoPolygon));
+    if (polygon)
+        *polygon = (LinkedGeoPolygon){0};
+    return polygon;
+}
+
+
+LinkedGeoLoop* create_empty_ring() {
+    LinkedGeoLoop* ring = malloc(sizeof(LinkedGeoLoop));
+    if (ring)
+        *ring = (LinkedGeoLoop){0};
+    return ring;
 }
 
 
