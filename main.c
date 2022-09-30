@@ -41,6 +41,8 @@ int main(int argc, char** argv) {
             "(at %d) %s\n",
             (int) parse_result.error_pos,
             wkt_parse_error_to_string(parse_result.error));
+        if (parse_result.message)
+            printf("%s\n", parse_result.message);
         exit(EXIT_FAILURE);
     }
     LinkedGeoPolygon* polygon = parse_result.object;

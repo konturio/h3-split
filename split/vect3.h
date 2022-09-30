@@ -15,6 +15,8 @@ void vect3_to_lat_lng(const Vect3 *vect, LatLng *coord);
 
 bool vect3_eq(const Vect3* v1, const Vect3* v2);
 
+double vect3_len(const Vect3 *vect);
+
 void vect3_normalize(Vect3 *vect);
 
 void vect3_sum(const Vect3 *vect1, const Vect3 *vect2, Vect3 *sum);

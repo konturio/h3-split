@@ -7,8 +7,12 @@
 #include <string.h>
 #include <split/h3.h>
 
-static const char WktTypeNamePolygon[] = "polygon";
-static const char WktTypeNameMultiPolygon[] = "multipolygon";
+static const char WktTypeName_Polygon[] = "polygon";
+static const char WktTypeName_MultiPolygon[] = "multipolygon";
+
+static const char Message_MemberPolygonDataEndExpected[] = "Expected end of member polygon data";
+static const char Message_PolygonDataEndExpected[] = "Expected end of polygon data";
+static const char Message_RingDataEndExpected[] = "Expected end of ring data";
 
 typedef enum {
     WktObjectType_None = 0,
@@ -102,6 +106,8 @@ const char* wkt_parse_error_to_string(WktParseError error) {
             return "Number expected";
         case WktParseError_InvalidNumber:
             return "Invalid number";
+        case WktParseError_CoordinateOutOfRange:
+            return "Invalid coordinate";
         case WktParseError_MemAllocFailed:
             return "Memory allocation failure";
         default:
@@ -121,6 +127,7 @@ void result_init(WktParseResult* result) {
     result->error = WktParseError_Ok;
     result->type = H3Type_None;
     result->object = NULL;
+    result->message = NULL;
 }
 
 
@@ -174,9 +181,9 @@ WktObjectType read_type(WktData* data, WktParseResult* result) {
         typename[i] = tolower(typename[i]);
 
     /* Match to type */
-    if (strncmp(typename, WktTypeNamePolygon, pos) == 0)
+    if (strncmp(typename, WktTypeName_Polygon, pos) == 0)
         type = WktObjectType_Polygon;
-    else if (strncmp(typename, WktTypeNameMultiPolygon, pos) == 0)
+    else if (strncmp(typename, WktTypeName_MultiPolygon, pos) == 0)
         type = WktObjectType_MultiPolygon;
 
     free(typename); /* free copy */
@@ -251,6 +258,7 @@ void parse_multi_polygon(WktData* data, WktParseResult* result) {
         if (multi_polygon)
             free_polygon(multi_polygon);
         result->error = WktParseError_RightParenExpected;
+        result->message = Message_MemberPolygonDataEndExpected;
         return;
     }
 
@@ -317,6 +325,7 @@ bool parse_next_polygon(
     if (is_empty(data) || data->data[0] != ')') {
         free_polygon(polygon);
         result->error = WktParseError_RightParenExpected;
+        result->message = Message_PolygonDataEndExpected;
         return false;
     }
     advance(data, 1);
@@ -379,6 +388,7 @@ bool parse_next_ring(
     if (is_empty(data) || data->data[0] != ')') {
         free_ring(ring);
         result->error = WktParseError_RightParenExpected;
+        result->message = Message_RingDataEndExpected;
         return false;
     }
     advance(data, 1);
@@ -414,23 +424,36 @@ bool parse_next_point(
     coords.lng = parse_coord(data, result);
     if (result->error)
         return false;
+    /* check range */
+    if (-180 > coords.lng || coords.lng > 180) {
+        result->error = WktParseError_CoordinateOutOfRange;
+        return false;
+    }
+    /* to radians */
     coords.lng = degsToRads(coords.lng);
+
     /* lat */
     coords.lat = parse_coord(data, result);
     if (result->error)
         return false;
+    /* check range */
+    if (-90 > coords.lat || coords.lat > 90) {
+        result->error = WktParseError_CoordinateOutOfRange;
+        return false;
+    }
+    /* to radians */
     coords.lat = degsToRads(coords.lat);
 
     /* Skip last point */
     /* assuming only the last point exactly matches the first */
-    if (ring->first) {
-        LatLng* coords_first = &ring->first->vertex;
-        if (coords.lng == coords_first->lng
-            && coords.lat == coords_first->lat)
-        {
-            return false;
-        }
-    }
+    /* if (ring->first) { */
+    /*     LatLng* coords_first = &ring->first->vertex; */
+    /*     if (coords.lng == coords_first->lng */
+    /*         && coords.lat == coords_first->lat) */
+    /*     { */
+    /*         return false; */
+    /*     } */
+    /* } */
 
     /* Create point */
     LinkedLatLng* point = malloc(sizeof(LinkedLatLng));

@@ -13,6 +13,7 @@ typedef enum {
     WktParseError_CommaExpected,
     WktParseError_NumberExpected,
     WktParseError_InvalidNumber,
+    WktParseError_CoordinateOutOfRange,
     WktParseError_MemAllocFailed
 } WktParseError;
 
@@ -21,6 +22,7 @@ typedef struct {
     H3Type type;
     void* object;
     size_t error_pos;
+    const char* message;
 } WktParseResult;
 
 WktParseResult wkt_parse(const char* wkt, size_t len);

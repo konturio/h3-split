@@ -7,11 +7,9 @@ void print_nl() {
 }
 
 void print_latlng(const LatLng* latlng) {
-    printf("(");
     print_double(radsToDegs(latlng->lng));
     printf(" ");
     print_double(radsToDegs(latlng->lat));
-    printf(")");
 }
 
 void print_vect3(const Vect3* vect) {
@@ -49,18 +47,50 @@ void print_bbox3_latlng(const Bbox3* bbox) {
     v2.y = bbox->ymax;
     v2.z = bbox->zmax;
 
-    LatLng latlng1, latlng2;
-    vect3_to_lat_lng(&v1, &latlng1);
-    vect3_to_lat_lng(&v2, &latlng2);
+    LatLng ll1, ll2;
+    vect3_to_lat_lng(&v1, &ll1);
+    vect3_to_lat_lng(&v2, &ll2);
+
+    printf("(");
+    print_latlng(&ll1);
+    printf(", ");
+    print_latlng(&ll2);
+    printf(")");
+}
+
+void print_bbox3_polygon(const Bbox3* bbox) {
+    Vect3 v1, v2;
+    v1.x = bbox->xmin;
+    v1.y = bbox->ymin;
+    v1.z = bbox->zmin;
+    v2.x = bbox->xmax;
+    v2.y = bbox->ymax;
+    v2.z = bbox->zmax;
+
+    LatLng ll1, ll2;
+    vect3_to_lat_lng(&v1, &ll1);
+    vect3_to_lat_lng(&v2, &ll2);
+
+    LatLng nw, ne, se, sw;
+    nw.lng = ll1.lng;
+    nw.lat = ll2.lat;
+    ne.lng = ll2.lng;
+    ne.lat = ll2.lat;
+    se.lng = ll2.lng;
+    se.lat = ll1.lat;
+    sw.lng = ll1.lng;
+    sw.lat = ll1.lat;
 
     printf("((");
-    print_double(radsToDegs(latlng1.lng));
+    print_latlng(&nw);
     printf(", ");
-    print_double(radsToDegs(latlng1.lat));
-    printf("), (");
-    print_double(radsToDegs(latlng2.lng));
+    print_latlng(&ne);
     printf(", ");
-    print_double(radsToDegs(latlng2.lat));
+    print_latlng(&se);
+    printf(", ");
+    print_latlng(&sw);
+    printf(", ");
+    print_latlng(&nw);
     printf("))");
 }
 

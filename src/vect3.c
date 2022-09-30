@@ -27,13 +27,19 @@ vect3_eq(const Vect3* v1, const Vect3* v2)
         && FP_EQUAL(v1->z, v2->z);
 }
 
-void
-vect3_normalize(Vect3 *vect)
+double
+vect3_len(const Vect3 *vect)
 {
-    double len = sqrt(
+    return sqrt(
         vect->x * vect->x
         + vect->y * vect->y
         + vect->z * vect->z);
+}
+
+void
+vect3_normalize(Vect3* vect)
+{
+    double len = vect3_len(vect);
     if (len > 0) {
         vect->x = vect->x / len;
         vect->y = vect->y / len;

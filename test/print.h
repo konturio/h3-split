@@ -14,4 +14,6 @@ void print_bbox3(const Bbox3* bbox);
 
 void print_bbox3_latlng(const Bbox3* bbox);
 
+void print_bbox3_polygon(const Bbox3* bbox);
+
 void print_double(double value);
