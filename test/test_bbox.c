@@ -27,8 +27,8 @@ int main() {
     latlng.lng = degsToRads(-174);
     check_bbox_contains(&bbox, &latlng, false);
 
-    latlng.lat = degsToRads(-177);
-    latlng.lng = degsToRads(3);
+    latlng.lng = degsToRads(-177);
+    latlng.lat = degsToRads(3);
     check_bbox_contains(&bbox, &latlng, true);
 }
 
@@ -40,7 +40,7 @@ void check_bbox_contains(const Bbox3* bbox, const LatLng* latlng, bool answer) {
         printf("[fail] ");
 
     printf("bbox ");
-    print_bbox3_latlng(bbox);
+    print_bbox3(bbox);
     printf(result ? " contains " : " does not contain ");
     print_latlng(latlng);
     printf("\n");

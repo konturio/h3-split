@@ -35,10 +35,14 @@ split_LDADD = $(MYLIBS)
 
 # Tests
 TESTS = \
-	test_bbox
+	test_bbox \
+	test_bbox1
 
 check_PROGRAMS = $(TESTS)
 TEST_SOURCES = test/print.h test/print.c
 
 test_bbox_SOURCES = test/test_bbox.c $(TEST_SOURCES)
 test_bbox_LDADD = $(MYLIBS)
+
+test_bbox1_SOURCES = test/test_bbox1.c $(TEST_SOURCES)
+test_bbox1_LDADD = $(MYLIBS)

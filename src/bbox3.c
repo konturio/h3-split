@@ -3,6 +3,11 @@
 #include <string.h>
 #include <split/vect3.h>
 
+#define DEBUG 0
+#if DEBUG
+# include <stdio.h>
+#endif
+
 typedef struct {
     double x;
     double y;
@@ -42,13 +47,15 @@ void bbox3_from_linked_loop(Bbox3* bbox, const LinkedGeoLoop* loop) {
 
     if (!next) return;
 
-    for (; cur != NULL; cur = cur->next, next = next->next ?: loop->first) {
+    for (; cur != NULL; cur = cur->next, next = next->next ? next->next : loop->first) {
         Vect3 next_vect;
         vect3_from_lat_lng(&next->vertex, &next_vect);
 
-        Bbox3 segment_bbox;
-        bbox3_from_segment_vect3(&segment_bbox, &vect, &next_vect);
-        bbox3_merge(bbox, &segment_bbox);
+        if (!vect3_eq(&vect, &next_vect)) {
+            Bbox3 segment_bbox;
+            bbox3_from_segment_vect3(&segment_bbox, &vect, &next_vect);
+            bbox3_merge(bbox, &segment_bbox);
+        }
 
         vect = next_vect;
     }
@@ -93,7 +100,7 @@ void bbox3_from_segment_vect3(Bbox3* bbox, const Vect3* v1, const Vect3* v2) {
     r1.x = 1.0;
     r1.y = 0.0;
     r2.x = vect3_dot(v2, v1);
-    r2.x = vect3_dot(v2, &v3);
+    r2.y = vect3_dot(v2, &v3);
 
     /* Origin */
     Vect2 orig;
@@ -104,7 +111,11 @@ void bbox3_from_segment_vect3(Bbox3* bbox, const Vect3* v1, const Vect3* v2) {
 
     /* Axis points: (1, 0, 0), (-1, 0, 0), (0, 1, 0), ... */
     Vect3 axes[6];
-    memset(axes, 0, 6 * sizeof(Vect3));
+    for (int i = 0; i < 6; ++i) {
+        axes[i].x = 0.0;
+        axes[i].y = 0.0;
+        axes[i].z = 0.0;
+    }
     axes[0].x = axes[2].y = axes[4].z = 1.0;
     axes[1].x = axes[3].y = axes[5].z = -1.0;
 
@@ -118,9 +129,9 @@ void bbox3_from_segment_vect3(Bbox3* bbox, const Vect3* v1, const Vect3* v2) {
         /* Is projected axis vector between r1 and r2 (is origin on opposite side of (r1, r2))? */
         if (vect2_segment_side(&r1, &r2, &rx) != orig_side) {
             Vect3 vx;
-            vx.x = rx.x * v1->x + rx.y * v2->x;
-            vx.y = rx.x * v1->y + rx.y * v2->y;
-            vx.z = rx.x * v1->z + rx.y * v2->z;
+            vx.x = rx.x * v1->x + rx.y * v3.x;
+            vx.y = rx.x * v1->y + rx.y * v3.y;
+            vx.z = rx.x * v1->z + rx.y * v3.z;
             bbox3_merge_vect3(bbox, &vx);
         }
     }

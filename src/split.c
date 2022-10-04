@@ -98,6 +98,7 @@ static LinkedLatLng* add_latlng(LinkedGeoLoop* loop, const LatLng* latlng);
 
 #if DEBUG
 static void dbg_print_split(const Split* split);
+static void dbg_print_vect3(const Vect3* vect);
 static void dbg_print_bbox_polygon(const Bbox3* bbox);
 static void dbg_print_latlng(const LatLng* latlng);
 static void dbg_print_double(double value);
@@ -200,12 +201,12 @@ bool is_ring_crossed(const LinkedGeoLoop* ring) {
     if (!next)
         return false; /* ring contains a single point */
 
-    for(; cur != NULL; cur = cur->next, next = next->next ?: ring->first) {
+    for(; cur != NULL; cur = cur->next, next = next->next ? next->next : ring->first) {
         /* Check if segment is split by antimeridian */
         double lng = cur->vertex.lng;
         double next_lng = next->vertex.lng;
         if (SIGN(lng) != SIGN(next_lng)
-            && fabs(lng) + fabs(next_lng) > M_PI)
+            && fabs(lng) + fabs(next_lng) > M_PI / 2 /* TEST */)
         {
             return true;
         }
@@ -290,7 +291,7 @@ void split_process_ring(Split* split, const LinkedGeoLoop* ring) {
     short sign = 0;
     int first_vertex_idx = -1;
     int vertex_idx = -1;
-    for (; cur != NULL; cur = cur->next, next = next->next ?: ring->first) {
+    for (; cur != NULL; cur = cur->next, next = next->next ? next->next : ring->first) {
         /* Add vertex */
         vertex_idx = split_add_vertex(split, &cur->vertex);
         if (first_vertex_idx < 0)
@@ -317,7 +318,7 @@ void split_process_ring(Split* split, const LinkedGeoLoop* ring) {
 
             /* Add intersection after current vertex */
             SplitIntersectDir dir = (sign < 0) ? SplitIntersectDir_WE : SplitIntersectDir_EW;
-            bool is_prime = (fabs(lng) + fabs(next_lng) < M_PI);
+            bool is_prime = (fabs(lng) + fabs(next_lng) < M_PI /* TEST */);
             double lat = split_180_lat(&cur->vertex, &next->vertex);
             split_add_intersect_after(split, vertex_idx, dir, is_prime, lat);
 
@@ -606,6 +607,8 @@ LinkedGeoPolygon* split_create_polygon_vertex(Split* split, int vertex_idx) {
     bbox3_from_linked_loop(&bbox, loop);
 #if DEBUG
     printf("Assigning holes: %d total\n", split->hole_num);
+    dbg_print_bbox_polygon(&bbox);
+    printf("\n");
 #endif
     for (int i = 0; i < split->hole_num; ++i) {
         const LinkedGeoLoop* hole = split->holes[i];
@@ -701,23 +704,15 @@ short latlng_ring_pos(const LinkedGeoLoop* ring, short sign, const Bbox3* bbox, 
     /* Check bbox */
     if (!bbox3_contains_vect3(bbox, &vect)) {
 #if DEBUG
-        printf(" hole (");
-        dbg_print_latlng(latlng);
-        printf(") not in bbox");
-        printf("\n");
+        printf("hole is not in bbox\n");
 #endif
         return -1;
     }
 
     /* Create a point that's guaranteed to be outside the polygon */
     LatLng out;
-    out.lng = -sign * (M_PI - 1e-10); /* ?? */
+    out.lng = (latlng->lng == 0) ? -sign * 1e-10 : -latlng->lng;
     out.lat = latlng->lat;
-#if DEBUG
-    printf(" hole out (");
-    dbg_print_latlng(&out);
-    printf(")\n");
-#endif
     Vect3 out_vect;
     vect3_from_lat_lng(&out, &out_vect);
 
@@ -730,7 +725,7 @@ short latlng_ring_pos(const LinkedGeoLoop* ring, short sign, const Bbox3* bbox, 
 
     Vect3 cur_vect, next_vect;
     vect3_from_lat_lng(&cur->vertex, &cur_vect);
-    for (; cur != NULL; cur = cur->next, next = next->next ?: ring->first) {
+    for (; cur != NULL; cur = cur->next, next = next->next ? next->next : ring->first) {
         /* Check if point matches ring vertex */
         if (vect3_eq(&vect, &cur_vect))
             return 0;
@@ -738,12 +733,15 @@ short latlng_ring_pos(const LinkedGeoLoop* ring, short sign, const Bbox3* bbox, 
         /* Next vertex */
         vect3_from_lat_lng(&next->vertex, &next_vect);
 
-        short intersect = segment_intersect(&cur_vect, &next_vect, &vect, &out_vect);
-        if (intersect == 0)
-            return 0; /* point on ring segment */
+        /* Check if segment endpoints match */
+        if (!vect3_eq(&cur_vect, &next_vect)) {
+            short intersect = segment_intersect(&cur_vect, &next_vect, &vect, &out_vect);
+            if (intersect == 0)
+                return 0; /* point on ring segment */
 
-        if (intersect > 0)
-            ++intersect_num;
+            if (intersect > 0)
+                ++intersect_num;
+        }
 
         cur_vect = next_vect;
     }
@@ -944,6 +942,19 @@ void dbg_print_split(const Split* split) {
         printf("\n");
     }
 }
+
+
+void dbg_print_vect3(const Vect3* vect) {
+    printf("(");
+    dbg_print_double(vect->x);
+    printf(", ");
+    dbg_print_double(vect->y);
+    printf(", ");
+    dbg_print_double(vect->z);
+    printf(")");
+    printf("[len: %f]", vect3_len(vect));
+}
+
 
 
 void dbg_print_bbox_polygon(const Bbox3* bbox) {

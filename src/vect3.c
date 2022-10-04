@@ -1,4 +1,5 @@
 #include <split/vect3.h>
+#include <assert.h>
 #include <float.h>
 #include <math.h>
 
@@ -79,6 +80,8 @@ vect3_cross(const Vect3 *vect1, const Vect3 *vect2, Vect3 *prod)
 double
 vect3_dot(const Vect3 *vect1, const Vect3 *vect2)
 {
+    assert(fabs(vect3_len(vect1) - 1.0) < 1e-10);
+    assert(fabs(vect3_len(vect2) - 1.0) < 1e-10);
     return (vect1->x * vect2->x) + (vect1->y * vect2->y) + (vect1->z * vect2->z);
 }
 
