@@ -7,6 +7,11 @@
 #include <string.h>
 #include <split/h3.h>
 
+#define DEBUG 0
+#if DEBUG
+# include <stdio.h>
+#endif
+
 static const char WktTypeName_Polygon[] = "polygon";
 static const char WktTypeName_MultiPolygon[] = "multipolygon";
 
@@ -400,6 +405,9 @@ bool parse_next_ring(
             {
                 add_point(ring, prev_point);
             }
+#if DEBUG
+            else printf("  (ring closing point skipped)\n");
+#endif
         }
     } else {
         if (prev_point)
@@ -544,6 +552,9 @@ void add_ring(LinkedGeoPolygon* polygon, LinkedGeoLoop* ring) {
         last->next = ring;
     }
     polygon->last = ring;
+#if DEBUG
+    printf(" ring added\n");
+#endif
 }
 
 
@@ -556,6 +567,9 @@ void add_point(LinkedGeoLoop* ring, LinkedLatLng* point) {
         last->next = point;
     }
     ring->last = point;
+#if DEBUG
+    printf("  point added\n");
+#endif
 }
 
 
