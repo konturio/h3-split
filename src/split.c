@@ -94,7 +94,7 @@ static LinkedGeoPolygon* copy_linked_geo_polygon(const LinkedGeoPolygon* polygon
 static LinkedGeoLoop* copy_linked_geo_loop(const LinkedGeoLoop* loop);
 static LinkedLatLng* copy_linked_latlng(const LinkedLatLng* latlng);
 
-static LinkedLatLng* add_latlng(LinkedGeoLoop* loop, const LatLng* latlng);
+static LinkedLatLng* add_latlng_unique(LinkedGeoLoop* loop, const LatLng* latlng, bool* skipped);
 
 #if DEBUG
 static void dbg_print_split(const Split* split);
@@ -206,7 +206,7 @@ bool is_ring_crossed(const LinkedGeoLoop* ring) {
         double lng = cur->vertex.lng;
         double next_lng = next->vertex.lng;
         if (SIGN(lng) != SIGN(next_lng)
-            && fabs(lng) + fabs(next_lng) > M_PI / 2 /* TEST */)
+            && fabs(lng) + fabs(next_lng) > M_PI)
         {
             return true;
         }
@@ -318,7 +318,7 @@ void split_process_ring(Split* split, const LinkedGeoLoop* ring) {
 
             /* Add intersection after current vertex */
             SplitIntersectDir dir = (sign < 0) ? SplitIntersectDir_WE : SplitIntersectDir_EW;
-            bool is_prime = (fabs(lng) + fabs(next_lng) < M_PI /* TEST */);
+            bool is_prime = (fabs(lng) + fabs(next_lng) < M_PI);
             double lat = split_180_lat(&cur->vertex, &next->vertex);
             split_add_intersect_after(split, vertex_idx, dir, is_prime, lat);
 
@@ -510,6 +510,7 @@ LinkedGeoPolygon* split_create_polygon_vertex(Split* split, int vertex_idx) {
     printf("# Starting from vertex idx: %d\n", idx);
 #endif
     while (vertex->latlng_p) {
+        bool skipped;
         int next_idx, intersect_idx;
 
         assert(vertex->sign == sign);
@@ -518,7 +519,7 @@ LinkedGeoPolygon* split_create_polygon_vertex(Split* split, int vertex_idx) {
         printf("\nstep: %d\n", step);
 #endif
         /* Add vertex */
-        if (!add_latlng(loop, vertex->latlng_p)) {
+        if (!add_latlng_unique(loop, vertex->latlng_p, &skipped) && !skipped) {
             free_linked_geo_polygon(polygon);
             return NULL;
         }
@@ -553,7 +554,7 @@ LinkedGeoPolygon* split_create_polygon_vertex(Split* split, int vertex_idx) {
             split_intersect_get_latlng(intersect, sign, &latlng);
 
             /* Add intersection vertex */
-            if (!add_latlng(loop, &latlng)) {
+            if (!add_latlng_unique(loop, &latlng, &skipped) && !skipped) {
                 free_linked_geo_polygon(polygon);
                 return NULL;
             }
@@ -569,7 +570,7 @@ LinkedGeoPolygon* split_create_polygon_vertex(Split* split, int vertex_idx) {
             split_intersect_get_latlng(intersect, sign, &latlng);
 
             /* Add next intersection vertex */
-            if (!add_latlng(loop, &latlng)) {
+            if (!add_latlng_unique(loop, &latlng, &skipped) && !skipped) {
                 free_linked_geo_polygon(polygon);
                 return NULL;
             }
@@ -902,11 +903,23 @@ LinkedLatLng* copy_linked_latlng(const LinkedLatLng* latlng) {
 }
 
 
-LinkedLatLng* add_latlng(LinkedGeoLoop* loop, const LatLng* latlng) {
+LinkedLatLng* add_latlng_unique(LinkedGeoLoop* loop, const LatLng* latlng, bool* skipped) {
 #if DEBUG
     dbg_print_latlng(latlng);
     printf("\n");
 #endif
+
+    *skipped = false;
+    if (loop->last) {
+        const LatLng* last = &loop->last->vertex;
+        if (last->lat == latlng->lat && last->lng == latlng->lng) {
+#if DEBUG
+            printf("^ duplicate vertex, skipped\n");
+#endif
+            *skipped = true;
+            return NULL;
+        }
+    }
 
     LinkedLatLng* linked = malloc(sizeof(LinkedLatLng));
     if (!linked)

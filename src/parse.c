@@ -43,8 +43,8 @@ static bool parse_next_polygon(
 static bool parse_next_ring(
     WktData* data, WktParseResult* result, LinkedGeoPolygon* polygon);
 
-static bool parse_next_point(
-    WktData* data, WktParseResult* result, LinkedGeoLoop* ring);
+static LinkedLatLng* parse_next_point(
+    WktData* data, WktParseResult* result, bool is_first);
 
 static double parse_coord(WktData* data, WktParseResult* result);
 
@@ -377,8 +377,33 @@ bool parse_next_ring(
     }
 
     /* Parse points */
-    while (parse_next_point(data, result, ring)) {}
-    if (result->error) {
+    LinkedLatLng* prev_point = NULL;
+    bool is_first = true;
+    while (true) {
+        LinkedLatLng* point = parse_next_point(data, result, is_first);
+        if (!point) break;
+
+        /* Add previous point */
+        if (prev_point)
+            add_point(ring, prev_point);
+
+        prev_point = point;
+        is_first = false;
+    }
+    if (!result->error) {
+        /* Add last point unless it matches first point exactly */
+        if (prev_point) {
+            const LinkedLatLng* first = ring->first;
+            if (!first
+                || first->vertex.lat != prev_point->vertex.lat
+                || first->vertex.lng != prev_point->vertex.lng)
+            {
+                add_point(ring, prev_point);
+            }
+        }
+    } else {
+        if (prev_point)
+            free(prev_point);
         free_ring(ring);
         return false;
     }
@@ -400,19 +425,19 @@ bool parse_next_ring(
 }
 
 
-bool parse_next_point(
-    WktData* data, WktParseResult* result, LinkedGeoLoop* ring)
+LinkedLatLng* parse_next_point(
+    WktData* data, WktParseResult* result, bool is_first)
 {
     skip_ws(data);
     if (is_empty(data) || data->data[0] == ')')
-        return false; /* end of point data, handled by caller */
+        return NULL; /* end of point data, handled by caller */
 
     /* Comma */
-    if (ring->last) {
+    if (!is_first) {
         /* Not a first point, comma expected */
         if (data->data[0] != ',') {
             result->error = WktParseError_CommaExpected;
-            return false;
+            return NULL;
         }
         /* Move to point data */
         advance(data, 1);
@@ -423,11 +448,11 @@ bool parse_next_point(
     /* lng */
     coords.lng = parse_coord(data, result);
     if (result->error)
-        return false;
+        return NULL;
     /* check range */
     if (-180 > coords.lng || coords.lng > 180) {
         result->error = WktParseError_CoordinateOutOfRange;
-        return false;
+        return NULL;
     }
     /* to radians */
     coords.lng = degsToRads(coords.lng);
@@ -435,39 +460,25 @@ bool parse_next_point(
     /* lat */
     coords.lat = parse_coord(data, result);
     if (result->error)
-        return false;
+        return NULL;
     /* check range */
     if (-90 > coords.lat || coords.lat > 90) {
         result->error = WktParseError_CoordinateOutOfRange;
-        return false;
+        return NULL;
     }
     /* to radians */
     coords.lat = degsToRads(coords.lat);
-
-    /* Skip last point */
-    /* assuming only the last point exactly matches the first */
-    /* if (ring->first) { */
-    /*     LatLng* coords_first = &ring->first->vertex; */
-    /*     if (coords.lng == coords_first->lng */
-    /*         && coords.lat == coords_first->lat) */
-    /*     { */
-    /*         return false; */
-    /*     } */
-    /* } */
 
     /* Create point */
     LinkedLatLng* point = malloc(sizeof(LinkedLatLng));
     if (!point) {
         result->error = WktParseError_MemAllocFailed;
-        return false;
+        return NULL;
     }
     *point = (LinkedLatLng){0};
     point->vertex = coords;
 
-    /* Add point */
-    add_point(ring, point);
-
-    return true;
+    return point;
 }
 
 
