@@ -81,5 +81,6 @@ void print_point(const LinkedLatLng* point) {
 
 
 void print_double(double value) {
-    printf("%.*f", DECIMAL_DIG, value);
+    /* printf("%.*f", DECIMAL_DIG, value); */
+    printf("%f", value);
 }
