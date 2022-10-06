@@ -1,6 +1,8 @@
 # Description
 The tool takes POLYGON or MULTIPOLYGON geometry in WKT format and cuts it by antimeridian.
 
+![split](https://user-images.githubusercontent.com/1970037/194345638-fb912c14-1971-48b2-8346-d3f9331fe3e8.png)
+
 # Usage
 ```
 $ split -f <wkt>
