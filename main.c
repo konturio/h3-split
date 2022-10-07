@@ -30,7 +30,7 @@ int main(int argc, char** argv) {
     size_t size;
     char* data = read_input(args.input_path, &size);
     if (!data) {
-        printf("Failed to read data\n");
+        printf("Failed to read data from `%s'\n", args.input_path);
         exit(EXIT_FAILURE);
     }
 
@@ -80,7 +80,9 @@ int main(int argc, char** argv) {
 
 
 void exit_usage(const char* name) {
-    printf("Usage: %s -f <filename|->[ -v]\n", name);
+    printf("Usage:\n");
+    printf("$ %s <filename>[ -v]\n", name);
+    printf("$ echo <wkt> | %s\n", name);
     exit(EXIT_FAILURE);
 }
 
@@ -91,10 +93,6 @@ void parse_args(Args* args, int argc, char** argv) {
     int opt;
     while ((opt = getopt(argc, argv, "vf:")) != -1) {
         switch (opt) {
-            case 'f':
-                if (strcmp(optarg, "-") != 0)
-                    args->input_path = optarg;
-                break;
             case 'v':
                 args->verbose = true;
                 break;
@@ -102,6 +100,9 @@ void parse_args(Args* args, int argc, char** argv) {
                 exit_usage(argv[0]);
         }
     }
+
+    if (optind < argc)
+        args->input_path = argv[optind];
 }
 
 
@@ -117,7 +118,7 @@ char* read_input(const char* path, size_t* size) {
     size_t alloc_size = 128;
     char* data = malloc(alloc_size);
     if (!data) {
-        fclose(input);
+        if (path) fclose(input);
         return NULL;
     }
 
@@ -131,8 +132,7 @@ char* read_input(const char* path, size_t* size) {
             data = realloc(data, alloc_size);
             if (!data) {
                 /* Failed to reallocate */
-                if (path)
-                    fclose(input);
+                if (path) fclose(input);
                 free(data);
                 *size = 0;
                 return NULL;
@@ -144,7 +144,6 @@ char* read_input(const char* path, size_t* size) {
         *size += bytes_read;
     }
 
-    if (path)
-        fclose(input);
+    if (path) fclose(input);
     return data;
 }

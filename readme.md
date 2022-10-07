@@ -5,7 +5,7 @@ The tool takes POLYGON or MULTIPOLYGON geometry in WKT format and cuts it by ant
 
 # Usage
 ```
-$ split -f <wkt>
+$ split <wkt-filename>
 $ echo <wkt> | split
 ```
 (There are input examples in `/example`.)
