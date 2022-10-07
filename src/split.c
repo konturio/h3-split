@@ -88,26 +88,28 @@ typedef struct {
     bool is_prime;
     double lat;
     int index;
-    int before;
     int sort_order;
 } SplitIntersect;
 
 typedef struct {
     const LatLng* latlng_p;
     int intersect_idx;
-    short sign;
-    int link;
+    short sign; /* longitude sign is set explicitly in case longitude of the vertex itself is zero */
+    int link;   /* links first and last vertices in a ring */
 } SplitVertex;
 
 typedef struct {
+    /* Vertices */
     int vertex_num;
     SplitVertex* vertices;
 
+    /* Intersections */
     int max_intersect_num;
     int intersect_num;
     SplitIntersect* intersects;
     SplitIntersect** sorted_intersects;
 
+    /* Non-split holes */
     int hole_num;
     const LinkedGeoLoop** holes;
 } Split;
@@ -610,7 +612,7 @@ LinkedGeoPolygon* split_create_polygon_vertex(Split* split, int vertex_idx) {
         if (intersect) {
             LatLng latlng;
 
-            /* Get intersect coordinates */
+            /* Get intersection coordinates */
             split_intersect_get_latlng(intersect, sign, &latlng);
 
             /* Add intersection vertex */
