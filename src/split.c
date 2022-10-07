@@ -6,6 +6,66 @@
 #include <split/h3.h>
 #include <split/vect3.h>
 
+/*
+
+Example: O-shaped polygon crossed by antimeridian.
+
+After intersections are found and sorted by latitude,
+intersection pairs 0-1 and 2-3 become segments in
+exterior rings of the polygons in result.
+
+          |
+  +------(0)------+
+  |       |       |
+  |  +---(1)---+  |
+  |  |    |    |  |
+  |  |    |    |  |
+  |  +---(2)---+  |
+  |       |       |
+  +------(3)------+
+          |
+
+
+Algorithm overview:
+
+1. Initialization:
+  - empty array of vertices
+  - empty array of intersections
+  - empty array of interior rings not split by antimeridian
+
+2. Processing polygon rings:
+  for each ring in the polygon:
+    if ring is crossed by prime or antimeridian:
+      for each segment in the ring:
+        - add first endpoint to array of vertices
+        if segment crosses antimeridian:
+          - add an intersection, link to first endpoint
+    else:
+      - add ring to array of non-split holes
+
+3. Preparing data:
+  - sort intersections by latitude
+  - set sort order value for each intersection
+
+4. Building multipolygon:
+  while there are unused vertices:
+    - create empty exterior ring
+    - start traversing vertex array forward starting from next unused vertex
+    while current vertex is unused:
+      - add current vertex to exterior ring
+      - get next vertex (depends on traversal direction)
+      if there is an intersection between vertices:
+        - add intersection point to exterior ring
+        - get adjacent intersection from sorted array
+        - add next intersection point to exterior ring
+        - update traversal direction based on intersection direction value
+        - get next vertex
+      - move to text vertex
+    - check which non-split holes are inside the exterior ring and add them to polygon
+    - add polygon to result
+
+ */
+
 #define DEBUG 0
 #if DEBUG
 # include <stdio.h>
