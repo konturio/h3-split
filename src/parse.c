@@ -404,10 +404,12 @@ bool parse_next_ring(
                 || first->vertex.lng != prev_point->vertex.lng)
             {
                 add_point(ring, prev_point);
-            }
+            } else {
 #if DEBUG
-            else printf("  (ring closing point skipped)\n");
+                printf("  (ring closing point skipped)\n");
 #endif
+                free(prev_point);
+            }
         }
     } else {
         if (prev_point)
